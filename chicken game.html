@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chicken Catch Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF6B35',
+                        secondary: '#00A896',
+                        accent: '#F8F32B',
+                        dark: '#1A1A2E',
+                        light: '#E9F1F7',
+                    },
+                    fontFamily: {
+                        game: ['"Comic Sans MS"', '"Marker Felt"', 'Arial', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            }
+            .chicken-shadow {
+                filter: drop-shadow(2px 2px 3px rgba(0, 0, 0, 0.3));
+            }
+            .btn-hover {
+                transition: all 0.2s ease;
+            }
+            .btn-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-light to-secondary min-h-screen font-game flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-4xl bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden">
+        <!-- Game Header -->
+        <header class="bg-primary text-white p-4 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,2.8rem)] font-bold text-shadow">Chicken Catch Game</h1>
+        </header>
+        
+        <!-- Game Control Panel -->
+        <div class="bg-dark text-white p-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center">
+                    <i class="fa fa-star text-accent text-xl mr-2"></i>
+                    <span class="text-xl font-bold" id="score">0</span>
+                </div>
+                <div class="flex items-center">
+                    <i class="fa fa-clock-o text-light text-xl mr-2"></i>
+                    <span class="text-xl font-bold" id="time">30</span>
+                </div>
+            </div>
+            <button id="startBtn" class="bg-accent text-dark px-6 py-2 rounded-full font-bold text-lg btn-hover">
+                Start Game
+            </button>
+        </div>
+        
+        <!-- Game Area -->
+        <div id="gameArea" class="relative w-full aspect-[4/3] bg-light/70 overflow-hidden">
+            <!-- Chickens will be dynamically generated here -->
+            <div class="absolute inset-0 flex items-center justify-center">
+                <p class="text-dark/70 text-xl text-center px-4">Click the Start button to begin</p>
+            </div>
+        </div>
+        
+        <!-- Game Instructions -->
+        <div class="p-4 bg-secondary/20">
+            <h2 class="text-xl font-bold text-dark mb-2">How to Play</h2>
+            <p class="text-dark/80">Click on the chickens to score points. You have 30 seconds to catch as many chickens as possible. The chickens will move faster as your score increases!</p>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="fixed inset-0 bg-dark/70 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+            <h2 class="text-3xl font-bold text-primary mb-4">Game Over!</h2>
+            <p class="text-xl mb-2">Your Score: <span id="finalScore" class="font-bold">0</span></p>
+            <button id="playAgainBtn" class="mt-6 bg-primary text-white px-8 py-3 rounded-full font-bold text-lg btn-hover">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const gameArea = document.getElementById('gameArea');
+        const startBtn = document.getElementById('startBtn');
+        const scoreElement = document.getElementById('score');
+        const timeElement = document.getElementById('time');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const finalScoreElement = document.getElementById('finalScore');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        
+        // Game state
+        let score = 0;
+        let time = 30;
+        let gameActive = false;
+        let gameInterval;
+        let chickenInterval;
+        let currentChicken = null;
+        let speedFactor = 1;
+        
+        // Create a chicken element
+        function createChicken() {
+            // Remove existing chicken if there is one
+            if (currentChicken) {
+                currentChicken.remove();
+            }
+            
+            // Create new chicken
+            const chicken = document.createElement('div');
+            chicken.className = 'absolute chicken-shadow cursor-pointer transition-all duration-150';
+            
+            // Random size
+            const size = Math.floor(Math.random() * 40) + 60;
+            chicken.style.width = `${size}px`;
+            chicken.style.height = `${size}px`;
+            
+            // Set chicken icon
+            chicken.innerHTML = '<i class="fa fa-pagelines text-primary text-4xl"></i>';
+            
+            // Random position (ensure it's fully within the game area)
+            const maxX = gameArea.clientWidth - size;
+            const maxY = gameArea.clientHeight - size;
+            const x = Math.floor(Math.random() * maxX);
+            const y = Math.floor(Math.random() * maxY);
+            chicken.style.left = `${x}px`;
+            chicken.style.top = `${y}px`;
+            
+            // Add click event
+            chicken.addEventListener('click', () => {
+                if (gameActive) {
+                    // Increase score
+                    score += 10;
+                    scoreElement.textContent = score;
+                    
+                    // Increase speed factor to make the game harder
+                    speedFactor += 0.1;
+                    
+                    // Animation for when the chicken is clicked
+                    chicken.style.transform = 'scale(0)';
+                    chicken.style.opacity = '0';
+                    
+                    // Remove current chicken and create a new one
+                    setTimeout(() => {
+                        createChicken();
+                    }, 200);
+                }
+            });
+            
+            // Add chicken to game area
+            gameArea.appendChild(chicken);
+            currentChicken = chicken;
+            
+            // Make the chicken move
+            moveChicken(chicken);
+        }
+        
+        // Move the chicken
+        function moveChicken(chicken) {
+            const size = parseInt(chicken.style.width);
+            const maxX = gameArea.clientWidth - size;
+            const maxY = gameArea.clientHeight - size;
+            
+            // Current position
+            let x = parseInt(chicken.style.left);
+            let y = parseInt(chicken.style.top);
+            
+            // Movement direction and speed
+            let dx = (Math.random() - 0.5) * 10 * speedFactor;
+            let dy = (Math.random() - 0.5) * 10 * speedFactor;
+            
+            // Movement animation
+            const move = () => {
+                if (!gameActive || !currentChicken || chicken !== currentChicken) {
+                    return;
+                }
+                
+                // Update position
+                x += dx;
+                y += dy;
+                
+                // Boundary check
+                if (x <= 0 || x >= maxX) {
+                    dx = -dx;
+                    x += dx;
+                }
+                if (y <= 0 || y >= maxY) {
+                    dy = -dy;
+                    y += dy;
+                }
+                
+                // Apply new position
+                chicken.style.left = `${x}px`;
+                chicken.style.top = `${y}px`;
+                
+                // Continue animation
+                requestAnimationFrame(move);
+            };
+            
+            // Start animation
+            move();
+        }
+        
+        // Start the game
+        function startGame() {
+            // Reset game state
+            score = 0;
+            time = 30;
+            speedFactor = 1;
+            scoreElement.textContent = score;
+            timeElement.textContent = time;
+            gameActive = true;
+            
+            // Clear game area
+            gameArea.innerHTML = '';
+            currentChicken = null;
+            
+            // Disable start button
+            startBtn.disabled = true;
+            startBtn.textContent = 'Game in Progress...';
+            startBtn.classList.add('opacity-70');
+            
+            // Hide game over modal
+            gameOverModal.classList.add('hidden');
+            
+            // Create first chicken
+            setTimeout(createChicken, 1000);
+            
+            // Set up game interval
+            gameInterval = setInterval(() => {
+                time--;
+                timeElement.textContent = time;
+                
+                if (time <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+        
+        // End the game
+        function endGame() {
+            gameActive = false;
+            
+            // Clear intervals
+            clearInterval(gameInterval);
+            
+            // Show game over modal
+            finalScoreElement.textContent = score;
+            gameOverModal.classList.remove('hidden');
+            
+            // Reset start button
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start Game';
+            startBtn.classList.remove('opacity-70');
+            
+            // Remove chicken
+            if (currentChicken) {
+                currentChicken.remove();
+                currentChicken = null;
+            }
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+        playAgainBtn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
+    
